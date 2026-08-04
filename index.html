@@ -82,11 +82,6 @@
   select:focus {
     outline: 1px solid var(--highlight);
   }
-  
-  option:disabled {
-    color: #6c7086;
-    font-style: italic;
-  }
 
   .makeup-days {
     color: #f38ba8;
@@ -101,7 +96,7 @@
     color: var(--pto-color);
   }
 
-  /* New Danger State Styling */
+  /* Danger State Styling */
   .danger-row td {
     background-color: var(--danger-bg);
     color: var(--danger-text);
@@ -247,19 +242,12 @@
          muCell.textContent = makeUpStr;
       }
 
-      // Determine if WFH should be disabled for this row.
+      // Determine if WFH puts the user in a deficit
       const theoreticalPossible = possibleLeft + (isUnavailable ? 1 : 0);
-      const wfhOption = select.querySelector('option[value="WFH"]');
       
-      if (wfhOption) {
-        if (needed > 0 && theoreticalPossible <= needed) {
-          wfhOption.disabled = true;
-          // The new corner-case check: flag the row if WFH is selected but shouldn't be
-          if (select.value === 'WFH') {
-            row.classList.add('danger-row');
-          }
-        } else {
-          wfhOption.disabled = false;
+      if (needed > 0 && theoreticalPossible <= needed) {
+        if (select && select.value === 'WFH') {
+          row.classList.add('danger-row');
         }
       }
 
