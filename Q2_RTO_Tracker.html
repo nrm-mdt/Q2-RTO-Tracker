@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q2 RTO Tracker</title>
+<style>
+  :root {
+    --bg-color: #1e1e2e;
+    --text-color: #cdd6f4;
+    --table-border: #45475a;
+    --header-bg: #313244;
+    --separator-bg: #181825;
+    --highlight: #89b4fa;
+    --pto-color: #f9e2af; 
+    --hol-color: #a6adc8; 
+    --danger-bg: #451e23;
+    --danger-text: #f38ba8;
+  }
+  
+  body {
+    font-family: "Courier New", Courier, monospace;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 2rem auto;
+    max-width: 900px;
+    padding: 0 1rem;
+  }
+
+  h2 {
+    color: var(--highlight);
+    border-bottom: 2px solid var(--table-border);
+    padding-bottom: 0.5rem;
+  }
+
+  .summary {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--header-bg);
+    border: 1px solid var(--table-border);
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 2rem;
+  }
+
+  th, td {
+    border: 1px solid var(--table-border);
+    padding: 10px;
+    text-align: left;
+  }
+
+  th {
+    background-color: var(--header-bg);
+    font-weight: bold;
+  }
+
+  .week-separator td {
+    background-color: var(--separator-bg);
+    height: 8px;
+    border-left: none;
+    border-right: none;
+    padding: 0;
+  }
+
+  select {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--table-border);
+    padding: 4px 8px;
+    font-family: inherit;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  select:focus {
+    outline: 1px solid var(--highlight);
+  }
+  
+  option:disabled {
+    color: #6c7086;
+    font-style: italic;
+  }
+
+  .makeup-days {
+    color: #f38ba8;
+    font-weight: bold;
+  }
+  
+  .holiday-row td {
+    color: var(--hol-color);
+  }
+
+  .pto-row td {
+    color: var(--pto-color);
+  }
+
+  /* New Danger State Styling */
+  .danger-row td {
+    background-color: var(--danger-bg);
+    color: var(--danger-text);
+  }
+  .danger-row select {
+    border-color: var(--danger-text);
+    color: var(--danger-text);
+  }
+</style>
+</head>
+<body>
+
+<h2>Q2 RTO Tracker</h2>
+<div class="summary" id="summaryBox">Total RTO Days: 0 / 43</div>
+
+<table id="rtoTable">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Status</th>
+      <th>Running Total</th>
+      <th>Make-up Threshold</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- JavaScript will populate the rows here -->
+  </tbody>
+</table>
+
+<script>
+  const totalRequired = 43;
+  const startDate = new Date(2026, 7, 3); // August 3, 2026
+  const endDate = new Date(2026, 9, 30);  // October 30, 2026
+  
+  const dates = [];
+  let currentDate = new Date(startDate);
+  
+  // Generate array of weekdays
+  while(currentDate <= endDate) {
+    if(currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+      dates.push(new Date(currentDate));
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  const tbody = document.querySelector('#rtoTable tbody');
+  const summaryBox = document.getElementById('summaryBox');
+
+  // Initialize table rows
+  dates.forEach((date, index) => {
+    const tr = document.createElement('tr');
+    
+    const dateOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+    const dateStr = date.toLocaleDateString('en-US', dateOptions);
+    
+    // Labor day is still auto-selected on initial generation
+    const isLaborDay = date.getMonth() === 8 && date.getDate() === 7;
+    
+    tr.innerHTML = `
+      <td>${dateStr}</td>
+      <td>
+        <select class="status-select" data-index="${index}">
+          <option value=""></option>
+          <option value="RTO">RTO</option>
+          <option value="WFH">WFH</option>
+          <option value="PTO">PTO</option>
+          <option value="HOL" ${isLaborDay ? 'selected' : ''}>HOL</option>
+        </select>
+      </td>
+      <td class="running-total"></td>
+      <td class="makeup-days"></td>
+    `;
+    
+    tbody.appendChild(tr);
+
+    // Add a blank separator row after every 5 days (one week)
+    if ((index + 1) % 5 === 0 && index !== dates.length - 1) {
+      const sep = document.createElement('tr');
+      sep.className = 'week-separator';
+      sep.innerHTML = `<td colspan="4"></td>`;
+      tbody.appendChild(sep);
+    }
+  });
+
+  function saveState() {
+    const state = [];
+    document.querySelectorAll('.status-select').forEach(select => {
+      state.push(select.value);
+    });
+    localStorage.setItem('q2RtoTrackerData', JSON.stringify(state));
+  }
+
+  function loadState() {
+    const saved = localStorage.getItem('q2RtoTrackerData');
+    if (saved) {
+      const state = JSON.parse(saved);
+      document.querySelectorAll('.status-select').forEach((select, index) => {
+        if (state[index]) {
+          select.value = state[index];
+        }
+      });
+    }
+  }
+
+  function updateTable() {
+    const rows = document.querySelectorAll('#rtoTable tbody tr:not(.week-separator)');
+    
+    // Step 1: Backward pass (Dynamic computation of workable days)
+    const workableDaysRemaining = new Array(rows.length).fill(0);
+    let workableCount = 0;
+    
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const select = rows[i].querySelector('.status-select');
+      if (select && select.value !== 'HOL' && select.value !== 'PTO') {
+        workableCount++;
+      }
+      workableDaysRemaining[i] = workableCount;
+    }
+
+    // Step 2: Forward pass (Updating totals and UI)
+    let currentRTO = 0;
+    
+    rows.forEach((row, index) => {
+      const select = row.querySelector('.status-select');
+      const isHoliday = select && select.value === 'HOL';
+      const isPTO = select && select.value === 'PTO';
+      const isUnavailable = isHoliday || isPTO;
+      
+      // Reset row styles
+      row.classList.remove('holiday-row', 'pto-row', 'danger-row');
+      
+      // Calculate what is needed BEFORE this row's status is applied
+      const needed = totalRequired - currentRTO;
+      const possibleLeft = workableDaysRemaining[index];
+      
+      let makeUpStr = '';
+      if (needed > 0 && possibleLeft <= needed) {
+        makeUpStr = isUnavailable ? '-' : possibleLeft;
+      }
+
+      const muCell = row.querySelector('.makeup-days');
+      if (muCell) {
+         muCell.textContent = makeUpStr;
+      }
+
+      // Determine if WFH should be disabled for this row.
+      const theoreticalPossible = possibleLeft + (isUnavailable ? 1 : 0);
+      const wfhOption = select.querySelector('option[value="WFH"]');
+      
+      if (wfhOption) {
+        if (needed > 0 && theoreticalPossible <= needed) {
+          wfhOption.disabled = true;
+          // The new corner-case check: flag the row if WFH is selected but shouldn't be
+          if (select.value === 'WFH') {
+            row.classList.add('danger-row');
+          }
+        } else {
+          wfhOption.disabled = false;
+        }
+      }
+
+      // Apply standard row colors if it isn't in a danger state
+      if (!row.classList.contains('danger-row')) {
+        if (isHoliday) {
+          row.classList.add('holiday-row');
+        } else if (isPTO) {
+          row.classList.add('pto-row');
+        }
+      }
+
+      // Apply this row's selection to the running total
+      if (select && select.value === 'RTO') {
+        currentRTO++;
+      }
+      
+      const rtCell = row.querySelector('.running-total');
+      if (rtCell) {
+         rtCell.textContent = `${currentRTO} / ${totalRequired}`;
+      }
+    });
+
+    // Update global summary box
+    summaryBox.textContent = `Total RTO Days: ${currentRTO} / ${totalRequired}`;
+    
+    saveState();
+  }
+
+  // Attach event listeners to all dropdowns
+  document.querySelectorAll('.status-select').forEach(select => {
+    select.addEventListener('change', updateTable);
+  });
+
+  // Load any previously saved data and run initial calculations
+  loadState();
+  updateTable();
+</script>
+</body>
+</html>
