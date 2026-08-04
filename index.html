@@ -172,7 +172,6 @@
     
     tbody.appendChild(tr);
 
-    // Add a blank separator row after every 5 days (one week)
     if ((index + 1) % 5 === 0 && index !== dates.length - 1) {
       const sep = document.createElement('tr');
       sep.className = 'week-separator';
@@ -204,36 +203,39 @@
   function updateTable() {
     const rows = document.querySelectorAll('#rtoTable tbody tr:not(.week-separator)');
     
-    // Step 1: Backward pass (Dynamic computation of workable days)
+    // Step 1: Backward pass (WFH now reduces the workable pool just like PTO and HOL)
     const workableDaysRemaining = new Array(rows.length).fill(0);
     let workableCount = 0;
     
     for (let i = rows.length - 1; i >= 0; i--) {
       const select = rows[i].querySelector('.status-select');
-      if (select && select.value !== 'HOL' && select.value !== 'PTO') {
+      const val = select ? select.value : '';
+      if (val !== 'HOL' && val !== 'PTO' && val !== 'WFH') {
         workableCount++;
       }
       workableDaysRemaining[i] = workableCount;
     }
 
-    // Step 2: Forward pass (Updating totals and UI)
+    // Step 2: Forward pass
     let currentRTO = 0;
     
     rows.forEach((row, index) => {
       const select = row.querySelector('.status-select');
       const isHoliday = select && select.value === 'HOL';
       const isPTO = select && select.value === 'PTO';
-      const isUnavailable = isHoliday || isPTO;
+      const isWFH = select && select.value === 'WFH';
       
-      // Reset row styles
+      // All three of these mean you didn't go to the office
+      const isUnavailable = isHoliday || isPTO || isWFH;
+      
       row.classList.remove('holiday-row', 'pto-row', 'danger-row');
       
-      // Calculate what is needed BEFORE this row's status is applied
       const needed = totalRequired - currentRTO;
       const possibleLeft = workableDaysRemaining[index];
       
       let makeUpStr = '';
       if (needed > 0 && possibleLeft <= needed) {
+        // If it's a day you aren't in the office, show a dash instead of the countdown number
         makeUpStr = isUnavailable ? '-' : possibleLeft;
       }
 
@@ -242,16 +244,14 @@
          muCell.textContent = makeUpStr;
       }
 
-      // Determine if WFH puts the user in a deficit
-      const theoreticalPossible = possibleLeft + (isUnavailable ? 1 : 0);
-      
-      if (needed > 0 && theoreticalPossible <= needed) {
-        if (select && select.value === 'WFH') {
+      // If you are mathematically short on days, flag WFH choices in red so you know what you can change
+      if (needed > 0 && possibleLeft < needed) {
+        if (isWFH) {
           row.classList.add('danger-row');
         }
       }
 
-      // Apply standard row colors if it isn't in a danger state
+      // Apply standard colors if it's not a danger row
       if (!row.classList.contains('danger-row')) {
         if (isHoliday) {
           row.classList.add('holiday-row');
@@ -260,7 +260,7 @@
         }
       }
 
-      // Apply this row's selection to the running total
+      // Add to running total if RTO
       if (select && select.value === 'RTO') {
         currentRTO++;
       }
@@ -271,18 +271,14 @@
       }
     });
 
-    // Update global summary box
     summaryBox.textContent = `Total RTO Days: ${currentRTO} / ${totalRequired}`;
-    
     saveState();
   }
 
-  // Attach event listeners to all dropdowns
   document.querySelectorAll('.status-select').forEach(select => {
     select.addEventListener('change', updateTable);
   });
 
-  // Load any previously saved data and run initial calculations
   loadState();
   updateTable();
 </script>
